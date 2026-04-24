@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>TBS Prospector — Agent IA CMM</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Inter:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  --dark:#0D1B2A;--blue:#1A5276;--mid:#2471A3;--light:#AED6F1;
+  --accent:#00D4AA;--green:#27AE60;--warn:#F39C12;--red:#E74C3C;
+  --bg:#F0F4F8;--card:#fff;--border:#D5E8F0;--text:#1A2332;--muted:#6B8099;
+  --mono:'DM Mono',monospace;--sans:'Inter',sans-serif;--display:'Syne',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:100vh}
+header{background:var(--dark);border-bottom:2px solid var(--blue);padding:0 24px;height:56px;
+  display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.logo{display:flex;align-items:center;gap:10px}
+.logo-mark{width:32px;height:32px;background:var(--blue);border-radius:5px;
+  display:flex;align-items:center;justify-content:center;font-family:var(--display);
+  font-weight:800;font-size:12px;color:white}
+.logo-text{font-family:var(--display);font-weight:700;font-size:16px;color:white}
+.logo-sub{font-family:var(--mono);font-size:10px;color:var(--light);opacity:.6}
+.header-badge{font-family:var(--mono);font-size:10px;color:var(--accent);
+  border:1px solid var(--accent);padding:3px 10px;border-radius:3px}
+
+.app{display:grid;grid-template-columns:320px 1fr;min-height:calc(100vh - 56px)}
+
+/* SIDEBAR */
+.sidebar{background:var(--dark);padding:20px 16px;overflow-y:auto;border-right:1px solid rgba(255,255,255,.07)}
+.s-section{margin-bottom:20px}
+.s-title{font-family:var(--mono);font-size:10px;letter-spacing:2px;color:var(--light);
+  opacity:.5;text-transform:uppercase;margin-bottom:10px;padding-bottom:5px;
+  border-bottom:1px solid rgba(255,255,255,.06)}
+label.lbl{display:block;font-size:11px;color:rgba(255,255,255,.5);margin-bottom:3px;margin-top:8px;font-family:var(--mono)}
+input[type=password],input[type=text],textarea{
+  width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);
+  border-radius:5px;padding:7px 10px;color:white;font-size:12px;font-family:var(--sans);outline:none}
+input:focus,textarea:focus{border-color:var(--accent)}
+textarea{resize:vertical;min-height:100px;font-size:11px;font-family:var(--mono)}
+.api-status{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10px;
+  padding:5px 8px;border-radius:4px;margin-top:6px}
+.api-status.ok{background:rgba(39,174,96,.1);color:var(--green)}
+.api-status.ko{background:rgba(231,76,60,.1);color:var(--red)}
+.dot{width:6px;height:6px;border-radius:50%;background:currentColor}
+
+.btn-run{width:100%;margin-top:8px;background:linear-gradient(135deg,var(--blue),var(--mid));
+  color:white;border:none;border-radius:7px;padding:13px;font-family:var(--display);
+  font-weight:700;font-size:13px;cursor:pointer;transition:all .2s}
+.btn-run:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 6px 20px rgba(26,82,118,.4)}
+.btn-run:disabled{opacity:.4;cursor:not-allowed}
+.btn-run.running{animation:pulse .8s ease-in-out infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(0,212,170,.4)}50%{box-shadow:0 0 0 8px rgba(0,212,170,0)}}
+
+.btn-export{width:100%;margin-top:6px;background:var(--green);color:white;border:none;
+  border-radius:7px;padding:10px;font-size:12px;font-weight:600;cursor:pointer;transition:all .2s}
+.btn-export:hover{background:#1e8449}
+.btn-export:disabled{opacity:.4;cursor:not-allowed}
+.btn-clear{width:100%;margin-top:6px;background:transparent;color:rgba(255,255,255,.4);
+  border:1px solid rgba(255,255,255,.1);border-radius:7px;padding:8px;font-size:11px;cursor:pointer;transition:all .2s}
+.btn-clear:hover{border-color:var(--red);color:var(--red)}
+
+/* MAIN */
+.main{padding:20px 24px;overflow-y:auto}
+.main-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.main-title{font-family:var(--display);font-weight:800;font-size:20px;color:var(--blue)}
+.stats-row{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:8px;
+  padding:10px 16px;text-align:center;min-width:100px}
+.stat-num{font-family:var(--display);font-size:22px;font-weight:700}
+.stat-lbl{font-size:10px;color:var(--muted);font-family:var(--mono);margin-top:2px}
+.stat-num.blue{color:var(--blue)}.stat-num.green{color:var(--green)}
+.stat-num.warn{color:var(--warn)}.stat-num.red{color:var(--red)}
+
+/* TABLE */
+.table-wrap{background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+table{width:100%;border-collapse:collapse;font-size:12px}
+thead th{background:var(--blue);color:white;padding:10px 8px;text-align:left;
+  font-family:var(--mono);font-size:10px;letter-spacing:.5px;white-space:nowrap;
+  position:sticky;top:0}
+tbody tr{border-bottom:1px solid var(--border);transition:background .15s}
+tbody tr:hover{background:#EBF5FB}
+tbody tr:last-child{border-bottom:none}
+td{padding:8px;vertical-align:top}
+td.company{font-weight:600;color:var(--text);max-width:180px}
+td.url{font-family:var(--mono);font-size:10px;color:var(--mid);max-width:150px;
+  word-break:break-all}
+.badge{display:inline-block;padding:2px 8px;border-radius:3px;font-size:10px;
+  font-family:var(--mono);font-weight:500;white-space:nowrap}
+.badge.oui{background:#D5F5E3;color:#1e8449}
+.badge.non{background:#FDEDEC;color:#a93226}
+.badge.undef{background:#FEF9E7;color:#7D6008}
+.badge.analyse{background:#EBF5FB;color:#1A5276}
+.badge.erreur{background:#FDEDEC;color:#a93226}
+
+.img-thumb{width:80px;height:50px;object-fit:cover;border-radius:4px;
+  border:1px solid var(--border);cursor:pointer;transition:transform .2s}
+.img-thumb:hover{transform:scale(1.05)}
+.no-img{font-size:10px;color:var(--muted);font-family:var(--mono)}
+
+.progress-bar{background:#E0E0E0;border-radius:4px;height:6px;margin-top:4px;overflow:hidden}
+.progress-fill{height:100%;background:var(--accent);border-radius:4px;transition:width .3s}
+
+/* LOG */
+.log{background:rgba(0,0,0,.7);border-radius:6px;padding:10px;max-height:140px;
+  overflow-y:auto;font-family:var(--mono);font-size:10px;color:#00D4AA;
+  border:1px solid rgba(0,212,170,.2)}
+.log-entry{margin-bottom:3px;line-height:1.5}
+.log-entry.err{color:#E74C3C}
+.log-entry.ok{color:#27AE60}
+.log-entry.info{color:#AED6F1}
+
+/* MODAL IMAGE */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:1000;
+  align-items:center;justify-content:center}
+.modal-bg.open{display:flex}
+.modal-img{max-width:90vw;max-height:85vh;border-radius:8px;border:2px solid var(--blue)}
+.modal-close{position:fixed;top:20px;right:24px;color:white;font-size:28px;cursor:pointer;
+  background:rgba(0,0,0,.5);width:40px;height:40px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center}
+
+/* EMPTY */
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  min-height:50vh;text-align:center;color:var(--muted)}
+.empty-icon{font-size:48px;margin-bottom:16px;filter:grayscale(.4)}
+.empty-title{font-family:var(--display);font-size:20px;font-weight:700;color:var(--blue);margin-bottom:8px}
+.empty-desc{font-size:13px;max-width:380px;line-height:1.7}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-mark">TBS</div>
+    <div>
+      <div class="logo-text">Prospector</div>
+      <div class="logo-sub">Agent IA — Détection CMM</div>
+    </div>
+  </div>
+  <div class="header-badge">TBSTRATEGIES</div>
+</header>
+
+<div class="app">
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div class="s-section">
+    <div class="s-title">Clé API Anthropic</div>
+    <input type="password" id="apiKey" placeholder="sk-ant-api03-..."/>
+    <div id="apiStatus" class="api-status ko"><span class="dot"></span>Non configurée</div>
+  </div>
+
+  <div class="s-section">
+    <div class="s-title">Entreprises à analyser</div>
+    <label class="lbl">Coller les données (Société | URL — une par ligne)</label>
+    <textarea id="companiesInput" placeholder="Ex:
+ROSSI AERO | www.rossi-aero.com
+TALOS PRECISION | www.talos-precision.com
+MECAPROTEC | www.mecaprotec.com"></textarea>
+    <label class="lbl" style="margin-top:8px">OU importer depuis Excel</label>
+    <div style="border:1.5px dashed rgba(255,255,255,.18);border-radius:6px;padding:10px;
+      text-align:center;cursor:pointer;margin-top:4px;position:relative" onclick="document.getElementById('fileInput').click()">
+      <input type="file" id="fileInput" accept=".xlsx,.xls" style="display:none" onchange="importerExcel(this)"/>
+      <div style="font-size:18px;margin-bottom:4px">📂</div>
+      <div style="font-size:11px;color:rgba(255,255,255,.5)">Cliquer pour importer XLSX</div>
+      <div id="importStatus" style="font-size:10px;color:var(--accent);margin-top:4px"></div>
+    </div>
+  </div>
+
+  <div class="s-section">
+    <div class="s-title">Options d'analyse</div>
+    <label style="display:flex;align-items:center;gap:8px;color:rgba(255,255,255,.7);font-size:12px;margin-top:4px;cursor:pointer">
+      <input type="checkbox" id="optCapture" checked style="width:auto"/> Capturer photos machines
+    </label>
+    <label style="display:flex;align-items:center;gap:8px;color:rgba(255,255,255,.7);font-size:12px;margin-top:6px;cursor:pointer">
+      <input type="checkbox" id="optLogiciel" checked style="width:auto"/> Détecter logiciel CMM
+    </label>
+    <label style="display:flex;align-items:center;gap:8px;color:rgba(255,255,255,.7);font-size:12px;margin-top:6px;cursor:pointer">
+      <input type="checkbox" id="optCollab" checked style="width:auto"/> Chercher nb collaborateurs
+    </label>
+    <label style="display:flex;align-items:center;gap:8px;color:rgba(255,255,255,.7);font-size:12px;margin-top:6px;cursor:pointer">
+      <input type="checkbox" id="optEmail" checked style="width:auto"/> Trouver email contact
+    </label>
+  </div>
+
+  <button class="btn-run" id="btnRun" onclick="lancerAnalyse()">▶ Analyser les entreprises</button>
+  <button class="btn-export" id="btnExport" onclick="exporterExcel()" disabled>⬇ Exporter résultats XLSX</button>
+  <button class="btn-clear" onclick="reinitialiser()">↺ Réinitialiser</button>
+
+  <div class="s-section" style="margin-top:16px">
+    <div class="s-title">Journal</div>
+    <div class="log" id="log"></div>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<main class="main">
+  <div class="main-header">
+    <div class="main-title">Résultats de l'analyse</div>
+    <div id="progressContainer" style="display:none;flex:1;max-width:300px;margin-left:20px">
+      <div style="font-size:11px;color:var(--muted);font-family:var(--mono)" id="progressText">0 / 0</div>
+      <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+    </div>
+  </div>
+
+  <div class="stats-row" id="statsRow" style="display:none">
+    <div class="stat-card"><div class="stat-num blue" id="statTotal">0</div><div class="stat-lbl">Analysées</div></div>
+    <div class="stat-card"><div class="stat-num green" id="statCMM">0</div><div class="stat-lbl">CMM détectée</div></div>
+    <div class="stat-card"><div class="stat-num warn" id="statUndef">0</div><div class="stat-lbl">Non défini</div></div>
+    <div class="stat-card"><div class="stat-num red" id="statNoCMM">0</div><div class="stat-lbl">Sans CMM</div></div>
+    <div class="stat-card"><div class="stat-num" id="statPhoto" style="color:var(--mid)">0</div><div class="stat-lbl">Photos CMM</div></div>
+  </div>
+
+  <div id="emptyState" class="empty">
+    <div class="empty-icon">🔍</div>
+    <div class="empty-title">Agent IA prêt</div>
+    <div class="empty-desc">Entrez vos entreprises dans la sidebar, configurez votre clé API Anthropic, puis lancez l'analyse. L'agent visitera chaque site et détectera les machines CMM.</div>
+  </div>
+
+  <div id="tableContainer" style="display:none">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>SOCIÉTÉ</th>
+            <th>SITE WEB</th>
+            <th>CMM PRÉSENTE</th>
+            <th>MARQUE CMM</th>
+            <th>LOGICIEL</th>
+            <th>PHOTO MACHINE</th>
+            <th>COLLABORATEURS</th>
+            <th>EMAIL</th>
+            <th>STATUT</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+</div>
+
+<!-- Modal image -->
+<div class="modal-bg" id="modalBg" onclick="fermerModal()">
+  <div class="modal-close" onclick="fermerModal()">✕</div>
+  <img id="modalImg" class="modal-img" src="" alt=""/>
+</div>
+
+<script>
+// ─── État global ──────────────────────────────────────────────────────────────
+let resultats = [];
+let enCours = false;
+
+// ─── API Key ──────────────────────────────────────────────────────────────────
+document.getElementById('apiKey').addEventListener('input', function(){
+  const ok = this.value.trim().startsWith('sk-ant');
+  const el = document.getElementById('apiStatus');
+  el.className = 'api-status ' + (ok ? 'ok' : 'ko');
+  el.innerHTML = `<span class="dot"></span>${ok ? 'Clé valide' : 'Non configurée'}`;
+});
+
+// ─── Import Excel ─────────────────────────────────────────────────────────────
+function importerExcel(input) {
+  const file = input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const wb = XLSX.read(e.target.result, {type:'binary'});
+    let lines = [];
+    wb.SheetNames.forEach(sheetName => {
+      if(sheetName === 'TABLEAU DE BORD') return;
+      const ws = wb.Sheets[sheetName];
+      const data = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+      // Trouver ligne en-tête
+      let headerIdx = -1;
+      data.forEach((row, i) => {
+        if(row.some(c => String(c).toUpperCase().includes('SOCIETE'))) headerIdx = i;
+      });
+      if(headerIdx === -1) return;
+      // Colonnes SOCIETE(0), TELEPHONE(1), SITE(2)
+      data.slice(headerIdx + 1).forEach(row => {
+        const societe = String(row[0] || '').trim();
+        const url = String(row[2] || '').trim();
+        if(societe && societe.length > 2) {
+          lines.push(`${societe} | ${url || 'non défini'}`);
+        }
+      });
+    });
+    document.getElementById('companiesInput').value = lines.join('\n');
+    document.getElementById('importStatus').textContent = `✓ ${lines.length} entreprises importées`;
+    log(`${lines.length} entreprises importées depuis ${file.name}`, 'ok');
+  };
+  reader.readAsBinaryString(file);
+}
+
+// ─── Log ──────────────────────────────────────────────────────────────────────
+function log(msg, type='info') {
+  const el = document.getElementById('log');
+  const entry = document.createElement('div');
+  entry.className = 'log-entry ' + type;
+  const time = new Date().toLocaleTimeString('fr-FR');
+  entry.textContent = `[${time}] ${msg}`;
+  el.appendChild(entry);
+  el.scrollTop = el.scrollHeight;
+}
+
+// ─── Parser les entreprises ───────────────────────────────────────────────────
+function parserEntreprises() {
+  const text = document.getElementById('companiesInput').value.trim();
+  if(!text) return [];
+  return text.split('\n').map(line => {
+    const parts = line.split('|').map(s => s.trim());
+    const nom = parts[0] || '';
+    let url = parts[1] || '';
+    if(url && !url.startsWith('http')) url = 'https://' + url.replace(/^www\./, 'www.');
+    if(url === 'non défini' || url === '') url = '';
+    return { nom, url };
+  }).filter(e => e.nom && e.nom.length > 1);
+}
+
+// ─── Appel Claude API ──────────────────────────────────────────────────────────
+async function appelClaude(prompt, maxTokens=1500) {
+  const apiKey = document.getElementById('apiKey').value.trim();
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method:'POST',
+    headers:{
+      'Content-Type':'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version':'2023-06-01',
+      'anthropic-dangerous-direct-browser-access':'true'
+    },
+    body: JSON.stringify({
+      model:'claude-haiku-4-5-20251001',
+      max_tokens: maxTokens,
+      messages:[{role:'user', content: prompt}]
+    })
+  });
+  if(!response.ok) throw new Error(`API ${response.status}`);
+  const data = await response.json();
+  return data.content.map(b => b.text||'').join('');
+}
+
+// ─── Fetch contenu site via proxy ──────────────────────────────────────────────
+async function fetchSite(url) {
+  if(!url) return '';
+  try {
+    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+    const resp = await fetch(proxyUrl);
+    if(!resp.ok) return '';
+    const data = await resp.json();
+    // Extraire texte brut du HTML
+    const div = document.createElement('div');
+    div.innerHTML = data.contents || '';
+    return div.innerText.substring(0, 4000);
+  } catch(e) {
+    return '';
+  }
+}
+
+// ─── Analyser une entreprise ───────────────────────────────────────────────────
+async function analyserEntreprise(entreprise) {
+  const opts = {
+    capture: document.getElementById('optCapture').checked,
+    logiciel: document.getElementById('optLogiciel').checked,
+    collab: document.getElementById('optCollab').checked,
+    email: document.getElementById('optEmail').checked
+  };
+
+  let contenuSite = '';
+  if(entreprise.url) {
+    contenuSite = await fetchSite(entreprise.url);
+  }
+
+  const prompt = `Tu es un agent de prospection industrielle pour TBSTRATEGIES (métrologie CMM, Toulouse).
+Analyse les informations de cette entreprise et réponds UNIQUEMENT en JSON valide.
+
+ENTREPRISE : ${entreprise.nom}
+URL : ${entreprise.url || 'non disponible'}
+CONTENU DU SITE (extrait) : 
+${contenuSite ? contenuSite.substring(0, 3000) : 'Site non accessible'}
+
+Réponds avec ce JSON exact :
+{
+  "cmm_presente": "OUI" | "NON" | "NON DÉFINI",
+  "marque_cmm": "ex: Zeiss, Hexagon, Wenzel, Renishaw, Mitutoyo, DEA, Brown&Sharpe ou NON DÉFINI",
+  "logiciel_cmm": "ex: Calypso, PC-DMIS, Quartis, PolyWorks, Metrolog ou NON DÉFINI",
+  "photo_machine_url": "URL directe de la photo de la machine CMM si trouvée, sinon null",
+  "photo_disponible": true | false,
+  "collaborateurs": "nombre ou tranche ex: 50-100 ou NON DÉFINI",
+  "secteur": "ex: Aéronautique, Automobile, Médical, Mécanique générale",
+  "email_contact": "email si trouvé sinon null",
+  "analyse": "1-2 phrases résumant le potentiel pour proposer des services CMM offline"
+}
+
+Règles importantes :
+- cmm_presente = OUI uniquement si tu es sûr que l'entreprise a une machine de mesure 3D CMM
+- cmm_presente = NON si le site mentionne clairement qu'il n'y a pas de CMM
+- cmm_presente = NON DÉFINI si le site ne donne pas assez d'info
+- Pour photo_machine_url : cherche dans le contenu des URLs d'images contenant des mots comme "cmm", "mesure", "tridimensionnel", "zeiss", "hexagon" etc.`;
+
+  const reponse = await appelClaude(prompt);
+  let cleaned = reponse.trim().replace(/^```json\s*/,'').replace(/\s*```$/,'').trim();
+  return JSON.parse(cleaned);
+}
+
+// ─── Lancer l'analyse ──────────────────────────────────────────────────────────
+async function lancerAnalyse() {
+  const apiKey = document.getElementById('apiKey').value.trim();
+  if(!apiKey.startsWith('sk-ant')) {
+    alert('Veuillez configurer votre clé API Anthropic');
+    return;
+  }
+  const entreprises = parserEntreprises();
+  if(!entreprises.length) {
+    alert('Veuillez entrer au moins une entreprise');
+    return;
+  }
+
+  enCours = true;
+  resultats = [];
+  document.getElementById('btnRun').disabled = true;
+  document.getElementById('btnRun').classList.add('running');
+  document.getElementById('btnRun').textContent = '⟳ Analyse en cours…';
+  document.getElementById('btnExport').disabled = true;
+  document.getElementById('emptyState').style.display = 'none';
+  document.getElementById('tableContainer').style.display = 'block';
+  document.getElementById('statsRow').style.display = 'flex';
+  document.getElementById('progressContainer').style.display = 'flex';
+  document.getElementById('tableBody').innerHTML = '';
+  majStats();
+
+  log(`Démarrage analyse de ${entreprises.length} entreprises`, 'info');
+
+  for(let i = 0; i < entreprises.length; i++) {
+    const e = entreprises[i];
+    const pct = Math.round((i / entreprises.length) * 100);
+    document.getElementById('progressText').textContent = `${i} / ${entreprises.length}`;
+    document.getElementById('progressFill').style.width = pct + '%';
+
+    // Ajouter ligne "en cours"
+    const trId = 'tr_' + i;
+    const tbody = document.getElementById('tableBody');
+    const tr = document.createElement('tr');
+    tr.id = trId;
+    tr.innerHTML = `
+      <td>${i+1}</td>
+      <td class="company">${e.nom}</td>
+      <td class="url">${e.url || '—'}</td>
+      <td colspan="7"><span class="badge analyse">⟳ Analyse en cours…</span></td>`;
+    tbody.appendChild(tr);
+    tr.scrollIntoView({behavior:'smooth', block:'nearest'});
+
+    log(`[${i+1}/${entreprises.length}] Analyse : ${e.nom}`, 'info');
+
+    try {
+      const result = await analyserEntreprise(e);
+      result.nom = e.nom;
+      result.url = e.url;
+      resultats.push(result);
+
+      // Mettre à jour la ligne
+      const cmm = result.cmm_presente || 'NON DÉFINI';
+      const badgeClass = cmm==='OUI' ? 'oui' : cmm==='NON' ? 'non' : 'undef';
+      
+      let photoHtml = '<span class="no-img">Non défini</span>';
+      if(result.photo_disponible && result.photo_machine_url) {
+        photoHtml = `<img class="img-thumb" src="${result.photo_machine_url}" 
+          onerror="this.style.display='none';this.nextElementSibling.style.display='block'"
+          onclick="ouvrirModal('${result.photo_machine_url}')" alt="CMM"/>
+          <span class="no-img" style="display:none">Image indisponible</span>`;
+      } else if(!result.photo_disponible) {
+        photoHtml = '<span class="no-img">Non disponible</span>';
+      }
+
+      tr.innerHTML = `
+        <td>${i+1}</td>
+        <td class="company">${e.nom}</td>
+        <td class="url"><a href="${e.url||'#'}" target="_blank" style="color:var(--mid)">${e.url ? new URL(e.url.startsWith('http')?e.url:'https://'+e.url).hostname : '—'}</a></td>
+        <td><span class="badge ${badgeClass}">${cmm}</span></td>
+        <td style="font-size:11px">${result.marque_cmm||'—'}</td>
+        <td style="font-size:11px">${result.logiciel_cmm||'—'}</td>
+        <td>${photoHtml}</td>
+        <td style="font-size:11px;text-align:center">${result.collaborateurs||'—'}</td>
+        <td style="font-size:11px">${result.email_contact ? `<a href="mailto:${result.email_contact}" style="color:var(--mid)">${result.email_contact}</a>` : '—'}</td>
+        <td><span class="badge undef">À contacter</span></td>`;
+
+      const statLog = cmm==='OUI' ? 'ok' : cmm==='NON' ? 'err' : 'info';
+      log(`✓ ${e.nom} → CMM: ${cmm} | ${result.marque_cmm||'?'} | ${result.logiciel_cmm||'?'}`, statLog);
+      majStats();
+
+    } catch(err) {
+      log(`✗ Erreur ${e.nom}: ${err.message}`, 'err');
+      resultats.push({ nom: e.nom, url: e.url, cmm_presente: 'ERREUR', erreur: err.message });
+      const trEl = document.getElementById(trId);
+      if(trEl) trEl.cells[3].innerHTML = `<span class="badge erreur">Erreur</span>`;
+    }
+
+    // Pause entre requêtes pour éviter rate limit
+    if(i < entreprises.length - 1) await new Promise(r => setTimeout(r, 1500));
+  }
+
+  document.getElementById('progressText').textContent = `${entreprises.length} / ${entreprises.length} — Terminé`;
+  document.getElementById('progressFill').style.width = '100%';
+  document.getElementById('btnRun').disabled = false;
+  document.getElementById('btnRun').classList.remove('running');
+  document.getElementById('btnRun').textContent = '▶ Analyser les entreprises';
+  document.getElementById('btnExport').disabled = false;
+  log(`Analyse terminée — ${resultats.length} entreprises traitées`, 'ok');
+  enCours = false;
+}
+
+// ─── Stats ────────────────────────────────────────────────────────────────────
+function majStats() {
+  document.getElementById('statTotal').textContent = resultats.length;
+  document.getElementById('statCMM').textContent = resultats.filter(r=>r.cmm_presente==='OUI').length;
+  document.getElementById('statUndef').textContent = resultats.filter(r=>r.cmm_presente==='NON DÉFINI').length;
+  document.getElementById('statNoCMM').textContent = resultats.filter(r=>r.cmm_presente==='NON').length;
+  document.getElementById('statPhoto').textContent = resultats.filter(r=>r.photo_disponible).length;
+}
+
+// ─── Export Excel ─────────────────────────────────────────────────────────────
+function exporterExcel() {
+  if(!resultats.length) return;
+  const data = resultats.map((r, i) => ({
+    'N°': i+1,
+    'SOCIÉTÉ': r.nom,
+    'SITE WEB': r.url||'',
+    'CMM PRÉSENTE': r.cmm_presente||'NON DÉFINI',
+    'MARQUE CMM': r.marque_cmm||'NON DÉFINI',
+    'LOGICIEL CMM': r.logiciel_cmm||'NON DÉFINI',
+    'PHOTO MACHINE': r.photo_disponible ? (r.photo_machine_url||'Oui') : 'Non disponible',
+    'COLLABORATEURS': r.collaborateurs||'NON DÉFINI',
+    'SECTEUR': r.secteur||'',
+    'EMAIL CONTACT': r.email_contact||'',
+    'STATUT': 'À contacter',
+    'DATE CONTACT': '',
+    'RÉSULTAT': '',
+    'ANALYSE IA': r.analyse||''
+  }));
+
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(data);
+  
+  // Largeurs colonnes
+  ws['!cols'] = [
+    {wch:4},{wch:30},{wch:28},{wch:14},{wch:20},{wch:18},
+    {wch:20},{wch:14},{wch:20},{wch:25},{wch:14},{wch:14},{wch:14},{wch:50}
+  ];
+
+  XLSX.utils.book_append_sheet(wb, ws, 'Résultats Prospection');
+  
+  const date = new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, `TBS_Prospection_CMM_${date}.xlsx`);
+  log('Export Excel généré', 'ok');
+}
+
+// ─── Modal image ──────────────────────────────────────────────────────────────
+function ouvrirModal(url) {
+  document.getElementById('modalImg').src = url;
+  document.getElementById('modalBg').classList.add('open');
+}
+function fermerModal() {
+  document.getElementById('modalBg').classList.remove('open');
+}
+
+// ─── Réinitialiser ────────────────────────────────────────────────────────────
+function reinitialiser() {
+  if(enCours && !confirm('Analyse en cours, voulez-vous vraiment arrêter?')) return;
+  resultats = [];
+  enCours = false;
+  document.getElementById('tableBody').innerHTML = '';
+  document.getElementById('tableContainer').style.display = 'none';
+  document.getElementById('statsRow').style.display = 'none';
+  document.getElementById('progressContainer').style.display = 'none';
+  document.getElementById('emptyState').style.display = 'flex';
+  document.getElementById('btnExport').disabled = true;
+  document.getElementById('btnRun').disabled = false;
+  document.getElementById('btnRun').classList.remove('running');
+  document.getElementById('btnRun').textContent = '▶ Analyser les entreprises';
+  document.getElementById('log').innerHTML = '';
+}
+</script>
+</body>
+</html>
