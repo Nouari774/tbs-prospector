@@ -386,38 +386,49 @@ async function trouverEntreprises(source, region, keywords, maxPar){
   const contenu = await fetchUrl(searchUrl);
 
   const prompt = `Tu es un agent de prospection industrielle pour TBSTRATEGIES (Toulouse, France).
-  
-Contexte : TBSTRATEGIES cherche des entreprises d'usinage et mécanique de précision en ${region} pour leur proposer des services de programmation offline sur machine de mesure tridimensionnelle (CMM).
 
-Source consultée : ${sourceNames[source]} (${searchUrl})
-Contenu de la page (extrait) : ${contenu.substring(0,3000) || 'Page non accessible - utilise tes connaissances'}
-Mots-clés : ${keywords}
-Région cible : ${region}
+CONTEXTE : TBSTRATEGIES propose des services de programmation offline sur machine de mesure tridimensionnelle (CMM). Nous ciblons les entreprises dont l'activité PRINCIPALE est l'usinage ou la mécanique de précision.
 
-MISSION : Génère une liste de ${maxPar} entreprises réelles spécialisées en usinage/mécanique de précision dans la région ${region}.
+Source : ${sourceNames[source]} — Région : ${region}
+Contenu page (extrait) : ${contenu.substring(0,3000) || 'Non accessible - utilise tes connaissances'}
 
-Si le contenu de la page contient des entreprises → extrais-les.
-Si le contenu n'est pas exploitable → génère des entreprises réelles que tu connais dans cette région (usinage, fraisage, tournage CNC, mécanique de précision, sous-traitance industrielle, aéronautique).
+SECTEURS À INCLURE :
+✅ Usinage CNC (fraisage 3/4/5 axes, tournage, alésage, rectification)
+✅ Mécanique de précision / décolletage
+✅ Sous-traitance mécanique aéro / auto / médical / défense
+✅ Fabrication de pièces mécaniques usinées
+✅ Prototypage par usinage
 
-Réponds UNIQUEMENT avec un JSON valide :
+SECTEURS À EXCLURE ABSOLUMENT :
+❌ Traitement de surface (peinture, anodisation, galvanisation, phosphatation)
+❌ Usinage chimique / chimie industrielle  
+❌ Formage / emboutissage / hydroformage / estampage
+❌ Fonderie / moulage / forge / coulée
+❌ Traitement thermique uniquement
+❌ Plasturgie / injection plastique
+❌ Bureaux d'études purs sans fabrication
+❌ Négoce / distribution
+
+Réponds UNIQUEMENT avec ce JSON valide :
 {
   "entreprises": [
     {
-      "nom": "Nom de l'entreprise",
-      "adresse": "Ville et département",
+      "nom": "Nom exact",
+      "adresse": "Ville, Département",
       "telephone": "numéro ou vide",
       "site_web": "https://www.site.com ou vide",
-      "secteur": "Usinage CNC / Mécanique précision / Aéronautique / etc",
+      "secteur": "ex: Usinage CNC 5 axes / Décolletage / Mécanique précision aéro",
       "source": "${sourceNames[source]}"
     }
   ]
 }
 
-IMPORTANT : 
-- Entreprises RÉELLES uniquement, pas inventées
-- Spécialisées en usinage/mécanique de précision
+RÈGLES STRICTES :
+- Entreprises RÉELLES uniquement (vérifiées, existantes)
+- Activité PRINCIPALE = usinage / mécanique de précision
 - Localisées en ${region}
-- Retourne exactement ${maxPar} entreprises`;
+- Exactement ${maxPar} entreprises
+- EXCLURE : Mecaprotec (traitement surface), Aurock (formage), tout ce qui n'est pas usinage`;
 
   const reponse = await appelClaude(prompt, 2500);
   let cleaned = reponse.trim().replace(/^```json\s*/,'').replace(/\s*```$/,'').trim();
@@ -592,41 +603,122 @@ function arreter(){
   log('Arrêt demandé…', 'warn');
 }
 
-// ─── Export Excel ─────────────────────────────────────────────────────────────
+// ─── Export Excel amélioré ────────────────────────────────────────────────────
 function exporterExcel(){
   if(!resultats.length) return;
   const region = document.getElementById('regionSelect').value;
-
-  const data = resultats.map((r,i) => ({
-    'N°': i+1,
-    'SOCIÉTÉ': r.entreprise.nom,
-    'ADRESSE': r.entreprise.adresse||'',
-    'TÉLÉPHONE': r.entreprise.telephone||'',
-    'SITE WEB': r.entreprise.site_web||'',
-    'SOURCE': r.entreprise.source||'',
-    'SECTEUR': r.entreprise.secteur||'',
-    'CMM PRÉSENTE': r.analyse?.cmm_presente||'NON DÉFINI',
-    'MARQUE CMM': r.analyse?.marque_cmm||'NON DÉFINI',
-    'LOGICIEL CMM': r.analyse?.logiciel_cmm||'NON DÉFINI',
-    'COLLABORATEURS': r.analyse?.collaborateurs||'NON DÉFINI',
-    'EMAIL': r.analyse?.email||'',
-    'POTENTIEL': r.analyse?.potentiel||'',
-    'NOTE IA': r.analyse?.note||'',
-    'STATUT': 'À contacter',
-    'DATE CONTACT': '',
-    'RÉSULTAT': '',
-    'NOTES': ''
-  }));
+  const date = new Date().toISOString().slice(0,10);
 
   const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.json_to_sheet(data);
-  ws['!cols'] = [{wch:4},{wch:30},{wch:22},{wch:14},{wch:25},{wch:16},{wch:20},
-    {wch:14},{wch:18},{wch:16},{wch:14},{wch:25},{wch:10},{wch:40},{wch:14},{wch:14},{wch:14},{wch:25}];
 
-  XLSX.utils.book_append_sheet(wb, ws, region.substring(0,30));
-  const date = new Date().toISOString().slice(0,10);
+  // ── Feuille principale résultats ──
+  const headers = ['N°','SOCIÉTÉ','ADRESSE','TÉLÉPHONE','SITE WEB','SOURCE','SECTEUR',
+    'CMM PRÉSENTE','MARQUE CMM','LOGICIEL CMM','COLLABORATEURS','EMAIL',
+    'POTENTIEL','NOTE IA','STATUT','DATE CONTACT','RÉSULTAT','NOTES'];
+
+  const rows = resultats.map((r,i) => [
+    i+1,
+    r.entreprise.nom,
+    r.entreprise.adresse||'',
+    r.entreprise.telephone||'',
+    r.entreprise.site_web||'',
+    r.entreprise.source||'',
+    r.entreprise.secteur||'',
+    r.analyse?.cmm_presente||'NON DÉFINI',
+    r.analyse?.marque_cmm||'NON DÉFINI',
+    r.analyse?.logiciel_cmm||'NON DÉFINI',
+    r.analyse?.collaborateurs||'NON DÉFINI',
+    r.analyse?.email||'',
+    r.analyse?.potentiel||'',
+    r.analyse?.note||'',
+    'À contacter','','',''
+  ]);
+
+  const wsData = [headers, ...rows];
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+  // Largeurs colonnes
+  ws['!cols'] = [{wch:4},{wch:30},{wch:22},{wch:14},{wch:28},{wch:16},{wch:24},
+    {wch:14},{wch:20},{wch:18},{wch:14},{wch:26},{wch:10},{wch:45},{wch:14},{wch:14},{wch:16},{wch:28}];
+
+  // Style en-têtes (ligne 1)
+  const range = XLSX.utils.decode_range(ws['!ref']);
+  for(let C = range.s.c; C <= range.e.c; C++){
+    const cell = ws[XLSX.utils.encode_cell({r:0, c:C})];
+    if(cell){
+      cell.s = {
+        font:{bold:true, color:{rgb:'FFFFFF'}, name:'Arial', sz:10},
+        fill:{patternType:'solid', fgColor:{rgb:'1A5276'}},
+        alignment:{horizontal:'center', vertical:'center', wrapText:true}
+      };
+    }
+  }
+
+  // Styles par ligne selon CMM
+  for(let R = 1; R < wsData.length; R++){
+    const cmm = wsData[R][7]; // col CMM PRÉSENTE
+    let rowColor = null;
+    if(cmm === 'OUI') rowColor = 'D5F5E3';
+    else if(cmm === 'NON') rowColor = 'FDEDEC';
+    else rowColor = R%2===0 ? 'EBF5FB' : 'FFFFFF';
+
+    for(let C = range.s.c; C <= range.e.c; C++){
+      const cellAddr = XLSX.utils.encode_cell({r:R, c:C});
+      if(!ws[cellAddr]) ws[cellAddr] = {v:'', t:'s'};
+      ws[cellAddr].s = {
+        fill:{patternType:'solid', fgColor:{rgb:rowColor}},
+        font:{name:'Arial', sz:9},
+        alignment:{vertical:'center', wrapText:C===13}
+      };
+    }
+  }
+
+  XLSX.utils.book_append_sheet(wb, ws, region.substring(0,28));
+
+  // ── Feuille résumé stats ──
+  const cmm_oui = resultats.filter(r=>r.analyse?.cmm_presente==='OUI');
+  const cmm_non = resultats.filter(r=>r.analyse?.cmm_presente==='NON');
+  const cmm_undef = resultats.filter(r=>!r.analyse||r.analyse?.cmm_presente==='NON DÉFINI');
+  const fort = resultats.filter(r=>r.analyse?.potentiel==='FORT');
+
+  const statsData = [
+    ['TBSTRATEGIES — RÉSUMÉ PROSPECTION CMM'],
+    [`Région : ${region} | Date : ${date}`],
+    [],
+    ['INDICATEUR','VALEUR'],
+    ['Total entreprises analysées', resultats.length],
+    ['CMM confirmée (OUI)', cmm_oui.length],
+    ['Sans CMM (NON)', cmm_non.length],
+    ['Non défini', cmm_undef.length],
+    ['Potentiel FORT', fort.length],
+    [],
+    ['RÉPARTITION PAR MARQUE CMM',''],
+  ];
+
+  const marques = {};
+  resultats.forEach(r => {
+    const m = r.analyse?.marque_cmm||'NON DÉFINI';
+    if(m !== 'NON DÉFINI') marques[m] = (marques[m]||0)+1;
+  });
+  Object.entries(marques).sort((a,b)=>b[1]-a[1]).forEach(([m,n]) => statsData.push([m, n]));
+
+  statsData.push([], ['RÉPARTITION PAR LOGICIEL CMM','']);
+  const logiciels = {};
+  resultats.forEach(r => {
+    const l = r.analyse?.logiciel_cmm||'NON DÉFINI';
+    if(l !== 'NON DÉFINI') logiciels[l] = (logiciels[l]||0)+1;
+  });
+  Object.entries(logiciels).sort((a,b)=>b[1]-a[1]).forEach(([l,n]) => statsData.push([l, n]));
+
+  statsData.push([], ['PRIORITÉS DE CONTACT (FORT)','']);
+  fort.forEach((r,i) => statsData.push([`${i+1}. ${r.entreprise.nom}`, r.entreprise.site_web||'']));
+
+  const wsStats = XLSX.utils.aoa_to_sheet(statsData);
+  wsStats['!cols'] = [{wch:35},{wch:20}];
+  XLSX.utils.book_append_sheet(wb, wsStats, 'Résumé');
+
   XLSX.writeFile(wb, `TBS_Prospection_${region.replace(/[^a-zA-Z0-9]/g,'_')}_${date}.xlsx`);
-  log('Export Excel généré', 'ok');
+  log(`Export Excel généré — ${resultats.length} entreprises`, 'ok');
 }
 
 // ─── Réinitialiser ────────────────────────────────────────────────────────────
